@@ -52,7 +52,46 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.error('Erro ao buscar usuário:', error);
       return;
     }
-    set({ user: data as Usuario });
+    if (data) {
+      set({ user: data as Usuario });
+      return;
+    }
+
+    // Profile not found — the trigger may have failed. Retry after a delay.
+    await new Promise(r => setTimeout(r, 800));
+    const { data: retryData } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+    if (retryData) {
+      set({ user: retryData as Usuario });
+      return;
+    }
+
+    // Still not found — attempt to create it manually as a fallback.
+    // Get the email from the current session.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const email = session.user.email || '';
+      const nomeFromMeta = (session.user.user_metadata as any)?.nome || email.split('@')[0];
+      // Check if any admin exists to determine role
+      const { data: adminCheck } = await supabase
+        .from('usuarios')
+        .select('id')
+        .eq('role', 'Administrador')
+        .limit(1)
+        .maybeSingle();
+      const role = adminCheck ? 'Visualizador' : 'Administrador';
+      const { data: created } = await supabase
+        .from('usuarios')
+        .insert({ id: userId, email, nome: nomeFromMeta, role })
+        .select('*')
+        .maybeSingle();
+      if (created) {
+        set({ user: created as Usuario });
+      }
+    }
   },
 
   signIn: async (email, password) => {
@@ -71,8 +110,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       options: { data: { nome } },
     });
     set({ loading: false });
-    if (error) return { error: error.message };
+    if (error) {
+      // Map common Supabase auth errors to Portuguese
+      const msg = error.message;
+      if (msg.includes('Database error saving new user')) {
+        return { error: 'Erro ao criar usuário. Tente novamente em alguns segundos.' };
+      }
+      if (msg.includes('User already registered')) {
+        return { error: 'Este e-mail já está cadastrado. Faça login.' };
+      }
+      return { error: msg };
+    }
+    // After signup, the trigger creates the profile asynchronously.
+    // If we have a session, fetch the profile. Otherwise, the onAuthStateChange
+    // listener will handle it when the session is established.
     if (data.user) {
+      // Small delay to let the trigger complete
+      await new Promise(r => setTimeout(r, 300));
       await get().fetchUsuario(data.user.id);
     }
     return { error: null };

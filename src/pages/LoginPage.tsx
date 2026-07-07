@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, Mail, Lock, User, Loader2, AlertCircle } from 'lucide-react';
+import { Building2, Mail, Lock, User, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export function LoginPage() {
   const { signIn, signUp, loading } = useAuthStore();
@@ -13,10 +13,12 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [nome, setNome] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     if (mode === 'login') {
       const { error } = await signIn(email, password);
       if (error) setError(error);
@@ -30,7 +32,14 @@ export function LoginPage() {
         return;
       }
       const { error } = await signUp(email, password, nome);
-      if (error) setError(error);
+      if (error) {
+        setError(error);
+      } else {
+        setSuccess('Conta criada com sucesso! Você já pode fazer login.');
+        setMode('login');
+        setNome('');
+        setPassword('');
+      }
     }
   };
 
@@ -107,6 +116,13 @@ export function LoginPage() {
                 <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive animate-fade-in">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>{error}</span>
+                </div>
+              )}
+
+              {success && (
+                <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-sm text-green-600 dark:text-green-400 animate-fade-in">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{success}</span>
                 </div>
               )}
 
